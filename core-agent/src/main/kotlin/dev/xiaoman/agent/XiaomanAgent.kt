@@ -245,7 +245,7 @@ class XiaomanAgent(
     }
 
     companion object {
-        const val MAX_TOOL_ROUNDS = 8
+        const val MAX_TOOL_ROUNDS = 16
         const val HISTORY_LIMIT = 20
         const val MEMORY_HITS = 5
         const val HOWTO_TYPE = "howto"

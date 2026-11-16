@@ -29,7 +29,7 @@ object Prompts {
 
     const val SKILLS_HEADER = "## 可用技能（phone_task 的 skill 参数）"
     const val CHAT_SKILLS_HEADER = "## 聊天工作流"
-    const val CHAT_SKILLS_HINT = "用户的话符合某个工作流的描述时，直接在对话里按它的说明做，可配合 memory_*、reminder_set 和外部工具；不要交给 phone_task。"
+    const val CHAT_SKILLS_HINT = "用户的话符合某个工作流的描述时，直接在对话里按它的说明做，可配合 memory_*、reminder_set 和外部工具；只有工作流明确要求打开某个 App 或界面时，才用 phone_task（skill 填工作流里指定的技能名）。"
     const val CHAT_SKILL_PHONE_REFUSED = "这是聊天工作流，不能通过 phone_task 执行，请直接在对话里按技能说明完成"
     const val NO_SKILLS = "（暂无技能，phone_task 将直接按目标操作）"
     const val MEMORY_HEADER = "## 可能相关的记忆"

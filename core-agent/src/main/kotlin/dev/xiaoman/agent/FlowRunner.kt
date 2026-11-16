@@ -83,7 +83,8 @@ internal class FlowRunner(
         }
         return PLACEHOLDER.replace(template) { m ->
             val v = task.values[m.groupValues[1]].orEmpty()
-            if (urlEncode) URLEncoder.encode(v, Charsets.UTF_8).replace("+", "%20") else v
+            // URLEncoder.encode(String, Charset) is API 33+ on Android; the encoding-name overload works everywhere.
+            if (urlEncode) URLEncoder.encode(v, "UTF-8").replace("+", "%20") else v
         }
     }
 

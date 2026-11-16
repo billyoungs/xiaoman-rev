@@ -1,0 +1,3 @@
+steps:
+  - deeplink: route
+  - wait: 3000

@@ -28,6 +28,7 @@ class SettingsStore(private val plain: SharedPreferences, internal val secret: S
             putModel(OPERATOR, settings.operator)
             putInt(MAX_STEPS, settings.maxSteps)
             putBoolean(LEARN, settings.learnFromSuccess)
+            putInt(OVERLAY_TRANSPARENCY, settings.overlayTransparency)
         }
         secret.edit(commit = true) {
             putString(CHAT + API_KEY, settings.chat.apiKey)
@@ -43,6 +44,8 @@ class SettingsStore(private val plain: SharedPreferences, internal val secret: S
             operator = model(OPERATOR),
             maxSteps = plain.getInt(MAX_STEPS, defaults.maxSteps),
             learnFromSuccess = plain.getBoolean(LEARN, defaults.learnFromSuccess),
+            overlayTransparency = plain.getInt(OVERLAY_TRANSPARENCY, defaults.overlayTransparency)
+                .coerceIn(AppSettings.OVERLAY_TRANSPARENCY_RANGE),
         )
     }
 
@@ -71,6 +74,7 @@ class SettingsStore(private val plain: SharedPreferences, internal val secret: S
         private const val TEMPERATURE = "temperature"
         private const val MAX_STEPS = "agent.maxSteps"
         private const val LEARN = "agent.learnFromSuccess"
+        private const val OVERLAY_TRANSPARENCY = "overlay.transparency"
 
         fun create(context: Context): SettingsStore =
             SettingsStore(context.getSharedPreferences(PLAIN_FILE, Context.MODE_PRIVATE), encrypted(context))

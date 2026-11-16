@@ -6,17 +6,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.xiaoman.app.AppGraph
 import dev.xiaoman.app.R
+import dev.xiaoman.app.settings.McpSettingsStore
 import dev.xiaoman.mcp.CatalogServer
 import dev.xiaoman.mcp.ConfirmPolicy
 import dev.xiaoman.mcp.CustomMcpServer
@@ -53,8 +61,11 @@ private val RECOMMENDED = setOf("amap", "aihot")
 
 /** One-tap MCP services: tick a service, paste its key, save. Changes apply from the next chat message. */
 @Composable
-fun McpScreen(graph: AppGraph) {
-    val store = graph.mcpSettings
+fun McpScreen(
+    graph: AppGraph,
+    store: McpSettingsStore = graph.mcpSettings,
+    testConnection: suspend (McpSelection) -> List<ServerStatus> = { graph.testMcp(it) },
+) {
     var selection by remember { mutableStateOf(store.current) }
     var saved by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
@@ -104,7 +115,7 @@ fun McpScreen(graph: AppGraph) {
                 scope.launch {
                     try {
                         status.clear()
-                        graph.testMcp(selection).forEach { status[it.name] = it }
+                        testConnection(selection).forEach { status[it.name] = it }
                     } finally {
                         testing = false
                     }
@@ -161,14 +172,42 @@ private fun ServiceCard(server: CatalogServer, selection: McpSelection, status: 
     }
 }
 
+/** The per-service result shown under a card after 测试连接: a clear success/failure badge plus detail. */
 @Composable
 private fun StatusLine(status: ServerStatus) {
-    if (status.connected) {
-        Text(stringResource(R.string.mcp_connected, status.toolCount), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary)
-    } else {
-        Text(stringResource(R.string.mcp_failed, status.error ?: "?"), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error)
+    val ok = status.connected
+    val scheme = MaterialTheme.colorScheme
+    val accent = if (ok) scheme.primary else scheme.error
+    Surface(
+        color = if (ok) scheme.primaryContainer else scheme.errorContainer,
+        contentColor = if (ok) scheme.onPrimaryContainer else scheme.onErrorContainer,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Error,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    stringResource(if (ok) R.string.mcp_test_success else R.string.mcp_test_failure),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accent,
+                )
+                Text(
+                    if (ok) stringResource(R.string.mcp_connected, status.toolCount)
+                    else stringResource(R.string.mcp_failed, status.error ?: "?"),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 

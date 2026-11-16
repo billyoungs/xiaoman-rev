@@ -69,10 +69,18 @@
     <string name="settings_agent">任务</string>
     <string name="settings_max_steps">最多步数</string>
     <string name="settings_learn">成功后记住操作路径</string>
+    <string name="settings_overlay_transparency">提示框背景透明度</string>
+    <string name="settings_overlay_transparency_hint">第三方 App 顶部步骤提示框的背景。0% 完全不透明，100% 完全透明；拖动即时预览，保存后生效。</string>
+    <string name="settings_overlay_preview_step">第 2 步：点击搜索框</string>
+    <string name="settings_overlay_preview_stop">停止</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">已保存</string>
     <string name="settings_invalid_number">请输入有效的数字</string>
     <string name="settings_copy_chat">与聊天模型相同</string>
+    <string name="settings_test_model">测试模型</string>
+    <string name="settings_test_model_running">测试中…</string>
+    <string name="settings_test_ok">连接成功 · %1$d ms · 回复：%2$s</string>
+    <string name="settings_test_failed">测试失败：%1$s</string>
     <string name="settings_folders">文件夹</string>
     <string name="settings_folder_skills">技能：%1$s</string>
     <string name="settings_folder_memory">记忆：%1$s</string>
@@ -101,6 +109,8 @@
     <string name="mcp_recommended">推荐组合</string>
     <string name="mcp_test">测试连接</string>
     <string name="mcp_testing">正在连接…</string>
+    <string name="mcp_test_success">测试成功</string>
+    <string name="mcp_test_failure">测试失败</string>
     <string name="mcp_official">官方</string>
     <string name="mcp_community">社区</string>
     <string name="mcp_apply_key">去申请</string>

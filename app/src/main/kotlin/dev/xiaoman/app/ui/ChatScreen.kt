@@ -7,6 +7,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -88,6 +90,14 @@ fun ChatScreen(graph: AppGraph, onOpenSettings: () -> Unit) {
             ApprovalCard(approval!!, session)
         } else {
             if (busy) TaskStatus(status ?: "正在想办法…", session::stop)
+            if (question?.confirmable == true) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { session.submit("取消") }) { Text("取消") }
+                    Spacer(Modifier.width(4.dp))
+                    Button(onClick = { session.submit("确认") }) { Text("确认") }
+                }
+            }
             ChatInput(draft, { draft = it }, session, busy, question != null)
         }
     }
@@ -97,6 +107,13 @@ fun ChatScreen(graph: AppGraph, onOpenSettings: () -> Unit) {
 private fun ChatInput(text: String, onChange: (String) -> Unit, session: AgentSession, busy: Boolean, answering: Boolean) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val interactions = remember { MutableInteractionSource() }
+    // 系统返回键隐藏键盘后输入框仍然保持焦点，再次点击不会触发焦点变化，输入法就不会重新弹出。
+    // 这里只在按下时补一次 show()，不主动 requestFocus：抢跑文本框自己的焦点请求会让它拿不到输入会话，
+    // 微信输入法等就不弹键盘了。
+    LaunchedEffect(interactions) {
+        interactions.interactions.collect { if (it is PressInteraction.Release) keyboard?.show() }
+    }
     val canSend = text.isNotBlank() && (!busy || answering)
     fun send() {
         if (!canSend) return
@@ -108,7 +125,9 @@ private fun ChatInput(text: String, onChange: (String) -> Unit, session: AgentSe
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
-                value = text, onValueChange = onChange, modifier = Modifier.weight(1f),
+                value = text, onValueChange = onChange,
+                modifier = Modifier.weight(1f),
+                interactionSource = interactions,
                 placeholder = { Text(if (answering) "告诉我就好…" else "说说你想做什么…", style = MaterialTheme.typography.bodyMedium) },
                 shape = MaterialTheme.shapes.large, textStyle = MaterialTheme.typography.bodyMedium,
                 minLines = 1, maxLines = 4,

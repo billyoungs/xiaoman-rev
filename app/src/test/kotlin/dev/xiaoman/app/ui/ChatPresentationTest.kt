@@ -39,4 +39,17 @@ class ChatPresentationTest {
     @Test fun unmatchedMarkersAndLiteralMathStayIntact() {
         assertEquals("2 * 3 = 6，**未结束", chatRichText("2 * 3 = 6，**未结束").text)
     }
+
+    @Test fun copiedReplyCarriesNoMarkdownMarkers() {
+        assertEquals("• 合计：2.40元\n尚未付款", chatPlainText("- **合计**：**2.40元**\n尚未付款"))
+        assertEquals("结果\n正文", chatPlainText("## 结果\n正文"))
+        assertEquals("2 * 3 = 6，**未结束", chatPlainText("2 * 3 = 6，**未结束"))
+    }
+
+    @Test fun copiedReplyMatchesTheBubbleItCameFrom() {
+        listOf("# 结果\n- **价格**：2.40元\n- 数量：3", "普通段落 **加粗** 收尾", "", "### \n- ",
+            "**跨行\n未闭合", "已完成，共 **3** 步").forEach { raw ->
+            assertEquals(chatRichText(raw).text, chatPlainText(raw), "复制内容与显示内容不一致：$raw")
+        }
+    }
 }

@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -28,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import dev.xiaoman.app.AppGraph
 import dev.xiaoman.app.R
@@ -44,10 +41,11 @@ enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 @Composable
 fun XiaomanRoot(graph: AppGraph) {
     var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
-    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     Scaffold(
         bottomBar = {
-            if (!keyboardOpen) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            // 底部导航常驻：之前按 IME 可见性隐藏，键盘收起后插值状态偶尔不刷新，
+            // 底栏和输入框会被一起推到屏幕外，点击输入框落空、键盘不再弹出。
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,

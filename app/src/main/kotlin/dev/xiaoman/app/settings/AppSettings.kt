@@ -35,6 +35,7 @@ data class AppSettings(
     val operator: ModelSettings = ModelSettings(),
     val maxSteps: Int = AgentConfig().maxSteps,
     val learnFromSuccess: Boolean = AgentConfig().learnFromSuccess,
+    val overlayTransparency: Int = DEFAULT_OVERLAY_TRANSPARENCY,
 ) {
     val configured: Boolean get() = chat.configured && operator.configured
 
@@ -43,8 +44,15 @@ data class AppSettings(
 
     fun agentConfig() = AgentConfig(maxSteps = maxSteps, learnFromSuccess = learnFromSuccess)
 
+    /** Background alpha (0..255) of the step pill drawn over other apps; 100% transparency = 0. */
+    val overlayAlpha: Int get() = ((100 - overlayTransparency.coerceIn(OVERLAY_TRANSPARENCY_RANGE)) * 255 + 50) / 100
+
     companion object {
         val MAX_STEPS_RANGE = 1..200
+        val OVERLAY_TRANSPARENCY_RANGE = 0..100
+
+        /** Matches the pill's original 0xF0 background so an upgrade changes nothing until adjusted. */
+        const val DEFAULT_OVERLAY_TRANSPARENCY = 6
     }
 }
 
@@ -56,6 +64,7 @@ data class SettingsForm(
     val operator: ModelForm = ModelForm(),
     val maxSteps: String = AgentConfig().maxSteps.toString(),
     val learnFromSuccess: Boolean = true,
+    val overlayTransparency: Int = AppSettings.DEFAULT_OVERLAY_TRANSPARENCY,
 ) {
     data class ModelForm(
         val baseUrl: String = ModelSettings.DEFAULT_BASE_URL,
@@ -83,11 +92,13 @@ data class SettingsForm(
     /** Null while a field is invalid. */
     fun toSettings(): AppSettings? {
         val steps = maxSteps.trim().toIntOrNull()?.takeIf { it in AppSettings.MAX_STEPS_RANGE } ?: return null
-        return AppSettings(chat.toSettings() ?: return null, operator.toSettings() ?: return null, steps, learnFromSuccess)
+        return AppSettings(chat.toSettings() ?: return null, operator.toSettings() ?: return null, steps, learnFromSuccess,
+            overlayTransparency.coerceIn(AppSettings.OVERLAY_TRANSPARENCY_RANGE))
     }
 
     companion object {
-        fun of(s: AppSettings) = SettingsForm(ModelForm.of(s.chat), ModelForm.of(s.operator), s.maxSteps.toString(), s.learnFromSuccess)
+        fun of(s: AppSettings) = SettingsForm(ModelForm.of(s.chat), ModelForm.of(s.operator), s.maxSteps.toString(),
+            s.learnFromSuccess, s.overlayTransparency)
 
         fun parseTemperature(text: String): Double? = text.trim().toDoubleOrNull()?.takeIf { it in 0.0..2.0 }
     }

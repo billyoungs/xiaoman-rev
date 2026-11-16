@@ -7,16 +7,16 @@ import dev.xiaoman.api.AgentEvent
 sealed class ChatItem {
     abstract val id: Long
 
-    data class User(override val id: Long, val text: String) : ChatItem()
+    data class User(override val id: Long, val text: String, val at: Long = System.currentTimeMillis()) : ChatItem()
 
-    data class Assistant(override val id: Long, val text: String) : ChatItem()
+    data class Assistant(override val id: Long, val text: String, val at: Long = System.currentTimeMillis()) : ChatItem()
 
     /** Compact progress line: steps, skill chosen, memory updated, task result. */
     data class Progress(override val id: Long, val text: String, val ok: Boolean? = null) : ChatItem()
 
-    data class Question(override val id: Long, val text: String, val takeover: Boolean) : ChatItem()
+    data class Question(override val id: Long, val text: String, val takeover: Boolean, val at: Long = System.currentTimeMillis()) : ChatItem()
 
-    data class Error(override val id: Long, val text: String) : ChatItem()
+    data class Error(override val id: Long, val text: String, val at: Long = System.currentTimeMillis()) : ChatItem()
 }
 
 /** Human-readable (Chinese) text for agent events, used by the chat list and the status overlay. */

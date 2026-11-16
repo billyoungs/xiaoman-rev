@@ -9,6 +9,7 @@ import dev.xiaoman.api.ApprovalRequest
 import dev.xiaoman.api.UserChannel
 import dev.xiaoman.app.RunIds
 import dev.xiaoman.hands.MutableStopSignal
+import dev.xiaoman.mcp.UserChannelApprovals
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +37,14 @@ data class SessionTexts(
     val denied: (String) -> String = { "已拒绝：$it" },
 )
 
-class PendingQuestion(val id: Long, val taskId: String, val question: String, val takeover: Boolean) {
+class PendingQuestion(
+    val id: Long,
+    val taskId: String,
+    val question: String,
+    val takeover: Boolean,
+    /** Yes/no question (tool confirmation): the chat screen offers 确认 / 取消 instead of typing. */
+    val confirmable: Boolean = false,
+) {
     internal val answer = CompletableDeferred<String>()
 }
 
@@ -182,13 +190,16 @@ class AgentSession(
     }
 
     override suspend fun ask(taskId: String, question: String, takeover: Boolean): String {
-        val pending = PendingQuestion(ids.incrementAndGet(), taskId, question, takeover)
+        val pending = PendingQuestion(ids.incrementAndGet(), taskId, question, takeover,
+            confirmable = question.contains(UserChannelApprovals.CONFIRM_MARKER))
         if (stopSignal.stopped) return texts.stopped
         _question.value = pending
         try {
             return pending.answer.await()
         } finally {
             _question.compareAndSet(pending, null)
+            // The "waiting for your answer" line must not survive the answer itself.
+            if (!stopSignal.stopped) _status.value = null
         }
     }
 

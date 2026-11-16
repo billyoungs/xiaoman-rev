@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
  *
  * All methods may be called from any thread.
  */
-class StatusOverlay(private val context: Context) {
+class StatusOverlay(private val context: Context, backgroundAlpha: Int = DEFAULT_ALPHA) {
 
     /** Invoked on the main thread when the user taps Stop. */
     var onStop: () -> Unit = {}
@@ -39,6 +39,7 @@ class StatusOverlay(private val context: Context) {
     private var root: LinearLayout? = null
     private var textView: TextView? = null
     private var pendingText: CharSequence = ""
+    private var backgroundAlpha: Int = backgroundAlpha.coerceIn(0, 255)
 
     val isShowing: Boolean get() = root?.isAttachedToWindow == true
 
@@ -59,6 +60,14 @@ class StatusOverlay(private val context: Context) {
     fun update(text: CharSequence) = onMain {
         pendingText = text
         textView?.text = text
+    }
+
+    /** Applies a new background alpha (0..255) live, even while the pill is on screen. */
+    fun setBackgroundAlpha(alpha: Int) = onMain {
+        backgroundAlpha = alpha.coerceIn(0, 255)
+        val view = root ?: return@onMain
+        (view.background as? GradientDrawable)?.setColor((backgroundAlpha shl 24) or BACKGROUND_RGB)
+        view.invalidate()
     }
 
     fun hide() = onMain {
@@ -108,6 +117,8 @@ class StatusOverlay(private val context: Context) {
         val pad = dp(10)
         val label = TextView(context).apply {
             setTextColor(0xFFFFFFFF.toInt())
+            // Keeps the step readable when the user makes the background nearly transparent.
+            setShadowLayer(2f, 0f, 1f, 0xB3000000.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
@@ -135,7 +146,7 @@ class StatusOverlay(private val context: Context) {
             setPadding(pad * 2, pad / 2, pad / 2, pad / 2)
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
-                setColor(0xF01E4635.toInt())
+                setColor((backgroundAlpha shl 24) or BACKGROUND_RGB)
             }
             addView(label, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = pad })
             addView(stop, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -164,5 +175,7 @@ class StatusOverlay(private val context: Context) {
 
     private companion object {
         const val TAG = "Xiaoman"
+        const val DEFAULT_ALPHA = 0xF0
+        private const val BACKGROUND_RGB = 0x1E4635
     }
 }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,8 +42,10 @@ internal fun ApprovalCard(pending: PendingApproval, session: AgentSession) {
         modifier = Modifier.fillMaxWidth().padding(12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("这一步，请你确认", style = MaterialTheme.typography.titleSmall)
-            Text(pending.request.prompt, style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.heightIn(max = 110.dp).verticalScroll(rememberScrollState()))
+            SelectionContainer {
+                Text(pending.request.prompt, style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.heightIn(max = 110.dp).verticalScroll(rememberScrollState()))
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = { responding = true; session.answerApproval(ApprovalAnswer(false), pending.id) },
                     enabled = !responding, modifier = Modifier.weight(1f)) { Text("暂不允许") }

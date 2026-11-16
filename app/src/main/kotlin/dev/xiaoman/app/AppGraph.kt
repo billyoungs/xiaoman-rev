@@ -4,10 +4,13 @@ import android.content.Context
 import android.util.Log
 import dev.xiaoman.agent.XiaomanAgent
 import dev.xiaoman.api.Agent
+import dev.xiaoman.api.ChatMessage
+import dev.xiaoman.api.ChatRequest
 import dev.xiaoman.api.ModelRole
 import dev.xiaoman.app.session.AgentSession
 import dev.xiaoman.app.session.SessionTexts
 import dev.xiaoman.app.settings.AppSettings
+import dev.xiaoman.app.settings.ModelSettings
 import dev.xiaoman.app.settings.SettingsStore
 import dev.xiaoman.app.trace.RecordingDevice
 import dev.xiaoman.app.trace.TraceWriter
@@ -33,9 +36,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.IOException
+
+/** Outcome of [AppGraph.testModel]: a round-trip to the endpoint, never containing the API key. */
+data class ModelTestResult(val ok: Boolean, val elapsedMillis: Long, val detail: String)
 
 /**
  * Manual dependency container. Everything is built lazily; [start] runs once from
@@ -60,6 +68,20 @@ class AppGraph(context: Context, private val llm: LlmClientFactory = LlmClients.
     val mcpFile = File(externalRoot, "mcp.json")
 
     val settings: SettingsStore by lazy { SettingsStore.create(app) }
+
+    /** One-shot round-trip with the values typed on the settings screen, used by the “测试模型” button. */
+    suspend fun testModel(model: ModelSettings, role: ModelRole): ModelTestResult = withContext(Dispatchers.IO) {
+        val started = System.currentTimeMillis()
+        try {
+            val reply = llm.create(model.toModelConfig(role))
+                .complete(ChatRequest(listOf(ChatMessage.user("只回复两个字：可用"))))
+            ModelTestResult(true, System.currentTimeMillis() - started, reply.text.trim().take(60))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ModelTestResult(false, System.currentTimeMillis() - started, e.message ?: e.javaClass.simpleName)
+        }
+    }
 
     val memory by lazy { FileMemoryStore(memoryDir) }
 
@@ -89,7 +111,7 @@ class AppGraph(context: Context, private val llm: LlmClientFactory = LlmClients.
         cachedMcp?.let { (s, provider) -> if (s == selection) return provider }
         cachedMcp?.second?.close()
         val config = mcpConfig(selection)
-        val provider = if (config.servers.isEmpty()) null else McpToolProvider(config, UserChannelApprovals(session))
+        val provider = if (config.servers.isEmpty()) null else McpToolProvider(config, UserChannelApprovals(session, session.listener))
         cachedMcp = selection to provider
         return provider
     }
@@ -172,7 +194,7 @@ class AppGraph(context: Context, private val llm: LlmClientFactory = LlmClients.
     fun start() {
         startup = scope.async(Dispatchers.IO) { prepareSkills() }
         notifier.createChannels()
-        OverlayController(session, accessibilityDevice, uiVisible = uiVisible).start(scope)
+        OverlayController(session, accessibilityDevice, uiVisible = uiVisible, settings = { settings.settings }).start(scope)
         scope.launch(Dispatchers.Main.immediate) {
             session.busy.collect { busy -> if (busy) AgentService.start(app) }
         }

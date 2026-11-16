@@ -58,7 +58,9 @@ class McpToolProviderTest {
     }
 
     @Test fun writesApprovesOnlyNonReadOnlyTools() = runBlocking {
-        val fake = FakeTransport(JsonArray(listOf(tool("read", true), tool("write", false), tool("unspecified"))))
+        // 麦当劳 MCP 不给 readOnlyHint：query-/list-/calculate- 这类名字不能再弹确认。
+        val fake = FakeTransport(JsonArray(listOf(tool("read", true), tool("write", false), tool("unspecified"),
+            tool("query-nearby-stores"), tool("calculate-price"), tool("order-list"), tool("create-order"))))
         val approvals = mutableListOf<ToolApprovalRequest>()
         val provider = McpToolProvider(McpConfig(listOf(McpServerConfig("maps"))), ToolApprovalGateway { approvals += it; true }, { fake })
         try {
@@ -66,10 +68,14 @@ class McpToolProviderTest {
             assertTrue(assertNotNull(provider.call("task", "maps__read", "")).ok)
             assertTrue(assertNotNull(provider.call("task", "maps__write", "{}" )).ok)
             assertTrue(assertNotNull(provider.call("task", "maps__unspecified", "{}" )).ok)
-            assertEquals(listOf("write", "unspecified"), approvals.map { it.tool })
+            assertTrue(assertNotNull(provider.call("task", "maps__query-nearby-stores", "{}" )).ok)
+            assertTrue(assertNotNull(provider.call("task", "maps__calculate-price", "{}" )).ok)
+            assertTrue(assertNotNull(provider.call("task", "maps__order-list", "{}" )).ok)
+            assertTrue(assertNotNull(provider.call("task", "maps__create-order", "{}" )).ok)
+            assertEquals(listOf("write", "unspecified", "create-order"), approvals.map { it.tool })
             assertEquals("task", approvals.first().taskId)
-            assertTrue(approvals.first().reason.contains("修改外部数据"))
-            assertEquals(3, fake.callCount)
+            assertTrue(approvals.first().reason.contains("可能会修改数据"))
+            assertEquals(7, fake.callCount)
             assertEquals(JsonObject(emptyMap()), fake.messages.last()["params"]?.jsonObject?.get("arguments"))
         } finally { provider.close() }
     }
@@ -249,6 +255,20 @@ class McpToolProviderTest {
             })
             assertEquals(reply.trim().lowercase() in setOf("确认", "是", "好", "可以", "y", "yes"), gateway.approve(request))
         }
+    }
+
+    @Test fun userChannelAnnouncesThePromptBeforeWaiting() = runBlocking {
+        val events = mutableListOf<AgentEvent>()
+        val request = ToolApprovalRequest("task", "maps", "weather", "天气", "{}", "需要确认")
+        val gateway = UserChannelApprovals(
+            UserChannel { _, _, _ -> "确认" },
+            AgentListener { events += it },
+        )
+        assertTrue(gateway.approve(request))
+        val needsUser = events.filterIsInstance<AgentEvent.NeedsUser>().single()
+        assertEquals("task", needsUser.taskId)
+        assertFalse(needsUser.takeover)
+        assertTrue(needsUser.question.contains("「天气」（maps）"))
     }
 
     @Test fun shortConfigValuesDoNotCorruptModelResults() = runBlocking {

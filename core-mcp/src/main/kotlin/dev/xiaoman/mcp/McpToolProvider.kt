@@ -131,12 +131,13 @@ class McpToolProvider(
             val confirm = when (server.confirm) {
                 ConfirmPolicy.NONE -> false
                 ConfirmPolicy.ALL -> true
-                ConfirmPolicy.WRITES -> tool.readOnlyHint != true
+                ConfirmPolicy.WRITES -> !tool.isReadOnly()
             }
             if (confirm && !approvals.approve(ToolApprovalRequest(
                     taskId, redactor.redact(server.title), redactor.redact(tool.name),
                     tool.title?.let(redactor::redact), redactor.redact(arguments.toString()),
-                    if (server.confirm == ConfirmPolicy.ALL) "该服务器的所有工具调用都需要确认" else "该工具会修改外部数据或产生费用",
+                    if (server.confirm == ConfirmPolicy.ALL) "该服务器的所有工具调用都需要确认"
+                    else "该工具可能会修改数据或产生费用",
                 ))) {
                 return result(false, buildJsonObject { put("error", "用户没有确认，未执行 ${tool.name}") }.toString())
             }
@@ -171,5 +172,33 @@ class McpToolProvider(
         val hash = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
             .take(4).joinToString("") { "%02x".format(it.toInt() and 255) }
         return clean.take(55) + "_" + hash
+    }
+
+    /**
+     * The annotation wins; servers without it (e.g. 麦当劳 MCP names every query `query-*` / `list-*` /
+     * `calculate-*`) fall back to the name. Anything that looks like a write keeps the confirmation.
+     */
+    private fun McpTool.isReadOnly(): Boolean = when (readOnlyHint) {
+        true -> true
+        false -> false
+        null -> !MUTATING_NAME.containsMatchIn(name) &&
+            (READ_ONLY_NAME.containsMatchIn(name) || READ_ONLY_SUFFIX.containsMatchIn(name))
+    }
+
+    private companion object {
+        val MUTATING_NAME = Regex(
+            "(^|[-_])(create|cancel|add|update|delete|remove|submit|place|pay|book|confirm|refund|" +
+                "apply|bind|modify|edit|send|upload|enable|disable|set|reset|clear)([-_]|$)",
+            RegexOption.IGNORE_CASE,
+        )
+        val READ_ONLY_NAME = Regex(
+            "^(query|list|get|search|calculate|check|read|fetch|find|describe|view|preview|lookup|" +
+                "delivery-query|campaign)[-_]",
+            RegexOption.IGNORE_CASE,
+        )
+        val READ_ONLY_SUFFIX = Regex(
+            "[-_](list|detail|details|info|status|calendar|history|records?)$",
+            RegexOption.IGNORE_CASE,
+        )
     }
 }

@@ -166,7 +166,7 @@ class OpenAiCompatibleClient(
         val choice = (root["choices"] as? JsonArray)?.firstOrNull() as? JsonObject
             ?: throw LlmException(redact("Response from $url has no choices: ${errorDetail(body)}"), 200)
         val message = choice["message"] as? JsonObject ?: JsonObject(emptyMap())
-        val toolCalls = (message["tool_calls"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val structuredCalls = (message["tool_calls"] as? JsonArray).orEmpty().mapNotNull { element ->
             val call = element as? JsonObject ?: return@mapNotNull null
             val function = call["function"] as? JsonObject ?: return@mapNotNull null
             val args = when (val a = function["arguments"]) {
@@ -176,10 +176,17 @@ class OpenAiCompatibleClient(
             }
             ToolCall(call.string("id").orEmpty(), function.string("name").orEmpty(), args)
         }
+        val rawText = contentText(message["content"])
+        // 某些模型在无法/不愿返回结构化 tool_calls 时（例如工具轮次用完、不再下发工具定义），
+        // 会把工具调用写成 <tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>
+        // 嵌在正文里。这里兜底解析出来，避免把原始 XML 当聊天内容显示给用户。
+        val (text, inlineCalls) =
+            if (structuredCalls.isEmpty()) parseInlineToolCalls(rawText) else rawText to emptyList()
+        val toolCalls = structuredCalls.ifEmpty { inlineCalls }
         val usage = (root["usage"] as? JsonObject)?.let {
             Usage(it.int("prompt_tokens") ?: 0, it.int("completion_tokens") ?: 0)
         }
-        return ChatResponse(contentText(message["content"]), toolCalls, choice.string("finish_reason"), usage)
+        return ChatResponse(text, toolCalls, choice.string("finish_reason"), usage)
     }
 
     private fun contentText(content: JsonElement?): String = when (content) {
@@ -193,6 +200,50 @@ class OpenAiCompatibleClient(
             }
         }
         is JsonObject -> content.string("text").orEmpty()
+    }
+
+    /**
+     * Extracts inline `<tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>` blocks
+     * from the model's text reply, returning the cleaned text and the parsed calls.
+     * Numeric / boolean values are coerced so MCP servers with typed schemas don't reject strings.
+     */
+    private fun parseInlineToolCalls(text: String): Pair<String, List<ToolCall>> {
+        if (!text.contains("<tool_call>")) return text to emptyList()
+        val calls = mutableListOf<ToolCall>()
+        val cleaned = StringBuilder()
+        var searchFrom = 0
+        val matches = TOOL_CALL_BLOCK.findAll(text)
+        for (match in matches) {
+            cleaned.append(text, searchFrom, match.range.first)
+            val block = match.groupValues[1]
+            parseInlineToolBlock(block, calls.size)?.let(calls::add)
+            searchFrom = match.range.last + 1
+        }
+        if (searchFrom < text.length) cleaned.append(text, searchFrom, text.length)
+        return cleaned.toString().trim() to calls
+    }
+
+    private fun parseInlineToolBlock(block: String, index: Int): ToolCall? {
+        val firstArg = block.indexOf("<arg_key>")
+        val name = (if (firstArg >= 0) block.substring(0, firstArg) else block).trim()
+        if (name.isEmpty()) return null
+        val args = buildJsonObject {
+            ARG_PAIR.findAll(block).forEach { m ->
+                val key = m.groupValues[1].trim()
+                if (key.isNotEmpty()) put(key, coerceArgValue(m.groupValues[2]))
+            }
+        }
+        return ToolCall("inline_${name}_$index", name, args.toString())
+    }
+
+    private fun coerceArgValue(raw: String): JsonElement {
+        val v = raw.trim()
+        v.toIntOrNull()?.let { return JsonPrimitive(it) }
+        v.toLongOrNull()?.let { return JsonPrimitive(it) }
+        v.toDoubleOrNull()?.let { return JsonPrimitive(it) }
+        if (v == "true") return JsonPrimitive(true)
+        if (v == "false") return JsonPrimitive(false)
+        return JsonPrimitive(raw)
     }
 
     /** Runs the HTTP call on [Dispatchers.IO]; cancelling the coroutine cancels the OkHttp call. */
@@ -251,6 +302,8 @@ class OpenAiCompatibleClient(
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+        val TOOL_CALL_BLOCK = Regex("<tool_call>(.*?)</tool_call>", RegexOption.DOT_MATCHES_ALL)
+        val ARG_PAIR = Regex("<arg_key>(.*?)</arg_key>\\s*<arg_value>(.*?)</arg_value>", RegexOption.DOT_MATCHES_ALL)
 
         fun isRetryable(code: Int) = code == 408 || code == 409 || code == 429 || code in 500..599
         fun JsonObject.string(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull

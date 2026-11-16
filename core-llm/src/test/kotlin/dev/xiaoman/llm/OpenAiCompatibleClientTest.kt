@@ -19,6 +19,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -190,6 +191,26 @@ class OpenAiCompatibleClientTest {
     fun `parses array content of text parts`() = runTest {
         server.enqueue(ok("""{"choices":[{"message":{"content":[{"type":"text","text":"a"},{"type":"text","text":"b"}]}}]}"""))
         assertEquals("ab", client().complete(ChatRequest(listOf(ChatMessage.user("x")))).text)
+    }
+
+    @Test
+    fun `parses inline tool call xml from content and strips it`() = runTest {
+        server.enqueue(
+            ok(
+                """
+                {"choices":[{"message":{"role":"assistant","content":"坐标已修正，现在查周边设施。<tool_call>amap__maps_around_search<arg_key>keywords</arg_key><arg_value>地铁站</arg_value><arg_key>location</arg_key><arg_value>121.528128,31.379671</arg_value><arg_key>radius</arg_key><arg_value>8000</arg_value></tool_call><tool_call>amap__maps_text_search<arg_key>keywords</arg_key><arg_value>滨江森林公园2号门</arg_value><arg_key>city</arg_key><arg_value>上海</arg_value></tool_call>"}}]}
+                """.trimIndent(),
+            ),
+        )
+        val response = client().complete(ChatRequest(listOf(ChatMessage.user("go"))))
+        assertEquals("坐标已修正，现在查周边设施。", response.text)
+        assertEquals(2, response.toolCalls.size)
+        val first = response.toolCalls[0]
+        assertEquals("amap__maps_around_search", first.name)
+        val args = Json.parseToJsonElement(first.argumentsJson).jsonObject
+        assertEquals("地铁站", args["keywords"]?.jsonPrimitive?.content)
+        assertEquals(8000, args["radius"]?.jsonPrimitive?.intOrNull)
+        assertEquals("amap__maps_text_search", response.toolCalls[1].name)
     }
 
     @Test
